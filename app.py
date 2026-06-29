@@ -310,7 +310,7 @@ if not st.session_state.analysis_done:
             <li>راجع النتائج وحمّل التقرير</li>
         </ol>
         <hr style='border-color:rgba(255,255,255,0.1);'/>
-        <h4 style='color:#f7971e;'>📐 قواعد الحساب</h4>
+        <h4 style='color:#f7971e;'>📐 قواعس الحساب</h4>
         <ul style='color:#a0aec0;line-height:2.2;'>
             <li>🔵 <strong style='color:#4facfe;'>اختيار البصمة:</strong> إذا كان اليوم به أكثر من بصمة، تُستخدم البصمة الأبكر في اليوم</li>
             <li>🔴 غياب كامل → خصم يوم كامل (لا توجد أي بصمة)</li>
@@ -612,44 +612,83 @@ else:
                 })
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-    # ── Export ────────────────────────────────────────────────────────────
+    # ── Export ──────────────────────────────────────────────────────────
     st.markdown('<div class="section-header">📥 تصدير التقرير</div>', unsafe_allow_html=True)
 
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        pd.DataFrame({
+        # جمع كل البيانات في sheet واحد
+        all_data = []
+        
+        # ملخص الراتب
+        all_data.append(["---", "===== ملخص الراتب =====", "", ""])
+        salary_summary = pd.DataFrame({
             "البيان": ["الراتب الأساسي","خصم الغياب","خصم ربع يوم","خصم نصف يوم",
                        "أيام معفوة بعذر","خصومات إضافية","حوافز وإضافات","إجمالي الخصومات","الراتب المستحق"],
             "القيمة (جنيه)": [sal,-absent_deduction,-quarter_deduction,-half_deduction,
                                0,-extra_deductions,incentives,-total_deductions,net_salary],
             "ملاحظة": ["","","","",f"{excused_total} بند",extra_deductions_note,incentives_note,"",""]
-        }).to_excel(writer, sheet_name="ملخص الراتب", index=False)
-
+        })
+        all_data.append(salary_summary)
+        all_data.append(["", "", "", ""])
+        
+        # أيام معفوة
         if st.session_state.excused_keys:
+            all_data.append(["---", "===== الأيام المعفوة =====", "", ""])
             excused_rows = []
             for vtype, d in all_violations:
                 if d["key"] in st.session_state.excused_keys:
                     lbl = {"absent":"غياب","quarter":"ربع يوم","half":"نصف يوم"}[vtype]
                     excused_rows.append({"التاريخ":d["date"].strftime("%d/%m/%Y"),"اليوم":d["day"],
                                          "نوع المخالفة":lbl,"السبب":st.session_state.excused_reasons.get(d["key"],"—")})
-            pd.DataFrame(excused_rows).to_excel(writer, sheet_name="الأيام المعفوة", index=False)
-
+            all_data.append(pd.DataFrame(excused_rows))
+            all_data.append(["", "", "", ""])
+        
+        # أيام الغياب
         if active_absent:
-            pd.DataFrame([{"التاريخ":d["date"].strftime("%d/%m/%Y"),"اليوم":d["day"],
-                           "السبب":d["reason"],"الخصم":day_rate} for d in active_absent]
-                         ).to_excel(writer, sheet_name="الغياب", index=False)
+            all_data.append(["---", "===== أيام الغياب =====", "", ""])
+            all_data.append(pd.DataFrame([{"التاريخ":d["date"].strftime("%d/%m/%Y"),"اليوم":d["day"],
+                           "السبب":d["reason"],"الخصم":day_rate} for d in active_absent]))
+            all_data.append(["", "", "", ""])
+        
+        # خصم ربع يوم
         if active_quarter:
-            pd.DataFrame([{"التاريخ":d["date"].strftime("%d/%m/%Y"),"اليوم":d["day"],
+            all_data.append(["---", "===== خصم ربع يوم (تأخر 15–29 دقيقة) =====", "", ""])
+            all_data.append(pd.DataFrame([{"التاريخ":d["date"].strftime("%d/%m/%Y"),"اليوم":d["day"],
                            "بصمة الحضور":d["punch_time"].strftime("%H:%M:%S"),
                            "كل البصمات":" ، ".join(p.strftime("%H:%M:%S") for p in d.get("all_punches",[])),
-                           "التأخير":d["delay"],"الخصم":day_rate/4} for d in active_quarter]
-                         ).to_excel(writer, sheet_name="ربع يوم", index=False)
+                           "التأخير":d["delay"],"الخصم":day_rate/4} for d in active_quarter]))
+            all_data.append(["", "", "", ""])
+        
+        # خصم نصف يوم
         if active_half:
-            pd.DataFrame([{"التاريخ":d["date"].strftime("%d/%m/%Y"),"اليوم":d["day"],
+            all_data.append(["---", "===== خصم نصف يوم (تأخر 30 دقيقة أو أكثر) =====", "", ""])
+            all_data.append(pd.DataFrame([{"التاريخ":d["date"].strftime("%d/%m/%Y"),"اليوم":d["day"],
                            "بصمة الحضور":d["punch_time"].strftime("%H:%M:%S"),
                            "كل البصمات":" ، ".join(p.strftime("%H:%M:%S") for p in d.get("all_punches",[])),
-                           "التأخير":d["delay"],"الخصم":day_rate/2} for d in active_half]
-                         ).to_excel(writer, sheet_name="نصف يوم", index=False)
+                           "التأخير":d["delay"],"الخصم":day_rate/2} for d in active_half]))
+            all_data.append(["", "", "", ""])
+        
+        # أيام الحضور بالموعد
+        if results["on_time_days"]:
+            all_data.append(["---", "===== أيام الحضور بالموعد أو قبله =====", "", ""])
+            all_data.append(pd.DataFrame([{"التاريخ":d["date"].strftime("%d/%m/%Y"),"اليوم":d["day"],
+                           "بصمة الحضور":d["punch_time"].strftime("%H:%M:%S"),
+                           "كل البصمات":" ، ".join(p.strftime("%H:%M:%S") for p in d.get("all_punches",[]))} 
+                           for d in results["on_time_days"]]))
+        
+        # دمج كل الداتا وكتابتها في sheet واحد
+        combined_data = []
+        for item in all_data:
+            if isinstance(item, list) and len(item) > 0 and item[0] == "---":
+                combined_data.append(item[1:])
+            elif isinstance(item, pd.DataFrame):
+                combined_data.extend(item.values.tolist())
+            else:
+                combined_data.append(item)
+        
+        final_df = pd.DataFrame(combined_data)
+        final_df.to_excel(writer, sheet_name="التقرير الكامل", index=False, header=False)
 
     st.download_button(
         label="📥 تحميل التقرير الكامل (Excel)",
