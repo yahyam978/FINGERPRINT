@@ -78,7 +78,7 @@ st.markdown("""
         word-wrap: break-word; white-space: normal; line-height: 1.6;
     }
     
-    /* --- NEW CLASSES FOR SALARY BREAKDOWN --- */
+    /* Classes for Salary Breakdown */
     .salary-breakdown-box {
         background: #1a1a2e; border-radius: 12px; padding: 20px;
         border: 1px solid rgba(255,255,255,0.1); direction: rtl;
@@ -389,7 +389,6 @@ else:
                     if count > 1:
                         punch_detail += f"<span style='color:#718096;font-size:0.78rem;'> | كل البصمات: {all_p}</span>"
 
-                # استخدام سطر واحد لتجنب التقطيع
                 st.markdown(f"<div style='padding:8px 0;direction:rtl;'><span style='color:{label_color};font-weight:700;'>{label_text}</span> <span style='color:white;font-weight:600;'>— {date_str} ({d['day']})</span> {'<span style=\"color:#a0aec0;font-size:0.85rem;\"> | ' + d.get('delay','') + '</span>' if vtype != 'absent' else ''} {punch_detail}</div>", unsafe_allow_html=True)
             
             with col_reason:
@@ -434,7 +433,7 @@ else:
     ]:
         col.markdown(f"<div class='metric-card'><div class='metric-label'>{lbl}</div><div class='metric-value {cls}'>{val}</div><div class='metric-label'>{sub}</div></div>", unsafe_allow_html=True)
 
-    # ── Salary breakdown (REFACTORED USING SEPARATE ROWS) ────────────────────────
+    # ── Salary breakdown ────────────────────────────────────────────────────────
     total_deductions = total_auto + extra_deductions
     net_salary = sal + incentives - total_deductions
 
@@ -442,22 +441,14 @@ else:
     s1, s2 = st.columns(2)
     
     with s1:
-        # حاوية الراتب الأساسية
         st.markdown('<div class="salary-breakdown-box">', unsafe_allow_html=True)
         st.markdown('<h4 style="color:#4facfe; margin-top:0; margin-bottom:15px; direction:rtl;">📊 تفاصيل الخصومات</h4>', unsafe_allow_html=True)
-        
-        # تفاصيل الصفوف بـ Markdown منفصل لكل سطر لتفادي أخطاء التنسيق
         st.markdown(f'<div class="breakdown-row"><span class="breakdown-label">الراتب الأساسي</span><span class="breakdown-value">{sal:,.1f} جنيه</span></div>', unsafe_allow_html=True)
-        
         if excused_total > 0:
             st.markdown(f'<div class="breakdown-row"><span class="breakdown-incentive">أيام/تأخيرات معفوة بعذر</span><span class="breakdown-incentive">✅ {excused_total} بند</span></div>', unsafe_allow_html=True)
-            
         st.markdown(f'<div class="breakdown-row"><span class="breakdown-label">خصم الغياب ({eff_absent} × {day_rate:.1f})</span><span class="breakdown-deduction">- {absent_deduction:,.1f} جنيه</span></div>', unsafe_allow_html=True)
-        
         st.markdown(f'<div class="breakdown-row"><span class="breakdown-label">خصم تأخير ربع يوم ({eff_quarter} × {day_rate/4:.1f})</span><span class="breakdown-deduction">- {quarter_deduction:,.1f} جنيه</span></div>', unsafe_allow_html=True)
-        
         st.markdown(f'<div class="breakdown-row"><span class="breakdown-label">خصم تأخير نصف يوم ({eff_half} × {day_rate/2:.1f})</span><span class="breakdown-deduction">- {half_deduction:,.1f} جنيه</span></div>', unsafe_allow_html=True)
-        
         st.markdown(f'<div class="breakdown-row"><span class="breakdown-label">خصم بدون خروج ({eff_nocheckout} × {day_rate/4:.1f})</span><span class="breakdown-deduction">- {nocheckout_deduction:,.1f} جنيه</span></div>', unsafe_allow_html=True)
         
         if extra_deductions > 0 or extra_deductions_note:
@@ -469,8 +460,6 @@ else:
             st.markdown(f'<div class="breakdown-row"><span class="breakdown-label">حوافز وإضافات{note}</span><span class="breakdown-incentive">+ {incentives:,.1f} جنيه</span></div>', unsafe_allow_html=True)
             
         st.markdown(f'<div class="breakdown-row" style="padding-top:15px;"><span style="color:white; font-weight:700; font-size:1.1rem;">إجمالي الخصومات</span><span style="color:#fc5c7d; font-weight:700; font-size:1.1rem;">- {total_deductions:,.1f} جنيه</span></div>', unsafe_allow_html=True)
-        
-        # إغلاق حاوية الراتب
         st.markdown('</div>', unsafe_allow_html=True)
 
     with s2:
@@ -483,7 +472,6 @@ else:
                 if d["key"] in st.session_state.excused_keys:
                     reason = st.session_state.excused_reasons.get(d["key"], "—")
                     lbl, clr = {"absent":("غياب","#fc5c7d"),"quarter":("تأخير ربع يوم","#f7971e"),"half":("تأخير نصف يوم","#fd7238"),"nocheckout":("بدون خروج","#b0c4de")}[vtype]
-                    # استخدام سطر منفرد مع الفئة المحدثة
                     st.markdown(f"<div class='excuse-box'><span style='color:#38ef7d;font-weight:700;'>{d['date'].strftime('%d/%m/%Y')} ({d['day']})</span> &nbsp;|&nbsp; <span style='color:{clr};font-weight:600;'>{lbl}</span> &nbsp;|&nbsp; <span style='color:#a0aec0;'>العذر: {reason if reason else 'لم يُذكر'}</span></div>", unsafe_allow_html=True)
 
     # ── Detail tables ───────────────────────────────────────────────────────────
@@ -516,28 +504,77 @@ else:
             rows = [{"#": i+1, "التاريخ": d["date"].strftime("%d/%m/%Y"), "اليوم": d["day"], "🔵 بصمة الحضور": d["punch_time"].strftime("%H:%M:%S"), "كل البصمات": " ، ".join(p.strftime("%H:%M:%S") for p in d.get("all_punches", []))} for i, d in enumerate(results["on_time_days"])]
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-    # ── Export ──────────────────────────────────────────────────────────────────
+    # ── Export (UPDATED TO SINGLE SHEET) ────────────────────────────────────────
     st.markdown('<div class="section-header">📥 تصدير التقرير</div>', unsafe_allow_html=True)
 
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        pd.DataFrame({
+        sheet_name = "تقرير الحضور"
+        current_row = 0
+        
+        # 1. جدول ملخص الراتب
+        df_summary = pd.DataFrame({
             "البيان": ["الراتب الأساسي","خصم الغياب","خصم تأخير ربع يوم","خصم تأخير نصف يوم","خصم بدون خروج","أيام/أعذار معفوة","خصومات إضافية","حوافز وإضافات","إجمالي الخصومات","الراتب المستحق"],
             "القيمة (جنيه)": [sal,-absent_deduction,-quarter_deduction,-half_deduction,-nocheckout_deduction,0,-extra_deductions,incentives,-total_deductions,net_salary],
             "ملاحظة": ["","","","","",f"{excused_total} بند",extra_deductions_note,incentives_note,"",""]
-        }).to_excel(writer, sheet_name="ملخص الراتب", index=False)
+        })
+        
+        pd.DataFrame([["ملخص الراتب وتفاصيل الحساب"]]).to_excel(writer, sheet_name=sheet_name, startrow=current_row, index=False, header=False)
+        current_row += 1
+        df_summary.to_excel(writer, sheet_name=sheet_name, startrow=current_row, index=False)
+        current_row += len(df_summary) + 3 
+        
+        # 2. جدول تفاصيل الخصومات والمخالفات الفعالة
+        all_active = []
+        all_active.extend([("غياب كامل", d, day_rate) for d in active_absent])
+        all_active.extend([("تأخير ربع يوم", d, day_rate/4) for d in active_quarter])
+        all_active.extend([("تأخير نصف يوم", d, day_rate/2) for d in active_half])
+        all_active.extend([("بدون خروج", d, day_rate/4) for d in active_nocheckout])
+        
+        if all_active:
+            all_active.sort(key=lambda x: x[1]['date'])
+            active_rows = []
+            for vtype, d, val in all_active:
+                details = d.get("reason", "")
+                if vtype != "غياب كامل":
+                    if vtype == "بدون خروج":
+                        details = f"دخول: {d['punch_time'].strftime('%H:%M:%S')} (لا يوجد انصراف)"
+                    else:
+                        details = f"{d.get('delay', '')} | بصمة الحضور: {d['punch_time'].strftime('%H:%M:%S')}"
+                        
+                active_rows.append({
+                    "التاريخ": d["date"].strftime("%d/%m/%Y"),
+                    "اليوم": d["day"],
+                    "نوع الخصم": vtype,
+                    "التفاصيل": details,
+                    "قيمة الخصم (جنيه)": val
+                })
+                
+            pd.DataFrame([["تفاصيل الخصومات والمخالفات (التي تم خصمها)"]]).to_excel(writer, sheet_name=sheet_name, startrow=current_row, index=False, header=False)
+            current_row += 1
+            pd.DataFrame(active_rows).to_excel(writer, sheet_name=sheet_name, startrow=current_row, index=False)
+            current_row += len(active_rows) + 3
 
+        # 3. جدول الأعذار (إن وجدت)
         if st.session_state.excused_keys:
-            excused_rows = [{"التاريخ":d["date"].strftime("%d/%m/%Y"),"اليوم":d["day"],"نوع المخالفة":{"absent":"غياب","quarter":"تأخير ربع يوم","half":"تأخير نصف يوم","nocheckout":"بدون خروج"}[vtype],"السبب":st.session_state.excused_reasons.get(d["key"],"—")} for vtype, d in all_violations if d["key"] in st.session_state.excused_keys]
-            pd.DataFrame(excused_rows).to_excel(writer, sheet_name="الأعذار", index=False)
+            excused_rows = []
+            for vtype, d in all_violations:
+                if d["key"] in st.session_state.excused_keys:
+                    lbl = {"absent":"غياب","quarter":"تأخير ربع يوم","half":"تأخير نصف يوم","nocheckout":"بدون خروج"}[vtype]
+                    excused_rows.append({
+                        "التاريخ": d["date"].strftime("%d/%m/%Y"),
+                        "اليوم": d["day"],
+                        "نوع المخالفة المعفوة": lbl,
+                        "سبب العذر": st.session_state.excused_reasons.get(d["key"], "—")
+                    })
+            if excused_rows:
+                pd.DataFrame([["سجل الأيام والأعذار المعفوة (لم يتم خصمها)"]]).to_excel(writer, sheet_name=sheet_name, startrow=current_row, index=False, header=False)
+                current_row += 1
+                pd.DataFrame(excused_rows).to_excel(writer, sheet_name=sheet_name, startrow=current_row, index=False)
 
-        if active_absent:
-            pd.DataFrame([{"التاريخ":d["date"].strftime("%d/%m/%Y"),"اليوم":d["day"],"السبب":d["reason"],"الخصم":day_rate} for d in active_absent]).to_excel(writer, sheet_name="الغياب", index=False)
-        if active_quarter:
-            pd.DataFrame([{"التاريخ":d["date"].strftime("%d/%m/%Y"),"اليوم":d["day"],"بصمة الحضور":d["punch_time"].strftime("%H:%M:%S"),"كل البصمات":" ، ".join(p.strftime("%H:%M:%S") for p in d.get("all_punches",[])),"التأخير":d["delay"],"الخصم":day_rate/4} for d in active_quarter]).to_excel(writer, sheet_name="تأخير ربع يوم", index=False)
-        if active_half:
-            pd.DataFrame([{"التاريخ":d["date"].strftime("%d/%m/%Y"),"اليوم":d["day"],"بصمة الحضور":d["punch_time"].strftime("%H:%M:%S"),"كل البصمات":" ، ".join(p.strftime("%H:%M:%S") for p in d.get("all_punches",[])),"التأخير":d["delay"],"الخصم":day_rate/2} for d in active_half]).to_excel(writer, sheet_name="تأخير نصف يوم", index=False)
-        if active_nocheckout:
-            pd.DataFrame([{"التاريخ":d["date"].strftime("%d/%m/%Y"),"اليوم":d["day"],"بصمة الدخول":d["punch_time"].strftime("%H:%M:%S"),"المشكلة":d["delay"],"الخصم":day_rate/4} for d in active_nocheckout]).to_excel(writer, sheet_name="بدون خروج", index=False)
-
-    st.download_button(label="📥 تحميل التقرير الكامل (Excel)", data=buffer.getvalue(), file_name=f"تقرير_حضور_{emp_name}_{s_date}_{e_date}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.download_button(
+        label="📥 تحميل التقرير الكامل (Excel)", 
+        data=buffer.getvalue(), 
+        file_name=f"تقرير_حضور_{emp_name}_{s_date}_{e_date}.xlsx", 
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
