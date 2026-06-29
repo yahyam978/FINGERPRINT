@@ -139,7 +139,13 @@ def analyze_attendance(df_parsed, start_date, end_date, required_time, off_days,
     if excused_keys is None:
         excused_keys = set()
 
-    results = {"absent_days": [], "quarter_deductions": [], "half_deductions": [], "no_checkout_days": [], "on_time_days": []}
+    results = {
+        "absent_days": [],
+        "quarter_deductions": [],
+        "half_deductions": [],
+        "no_checkout_days": [],
+        "on_time_days": []
+    }
     req_dt_base = datetime.combine(date.today(), required_time)
     quarter_limit = (req_dt_base + timedelta(minutes=16)).time()
     half_limit = (req_dt_base + timedelta(minutes=31)).time()
@@ -171,43 +177,19 @@ def analyze_attendance(df_parsed, start_date, end_date, required_time, off_days,
             
             # إذا كانت هناك بصمة دخول فقط بدون خروج
             if not has_checkout:
-                # حساب التأخر حتى مع عدم وجود بصمة خروج
-                if chosen_time >= half_limit:
-                    key = f"{current}|no_checkout_half"
-                    results["no_checkout_days"].append({
-                        "date": current, "day": day_name,
-                        "punch_time": chosen_time,
-                        "all_punches": [p.time() for p in all_punches],
-                        "punch_count": punch_count,
-                        "delay": f"تأخر {_diff_min(required_time, chosen_time)} دقيقة",
-                        "has_delay": True,
-                        "type": "half",
-                        "excused": key in excused_keys, "key": key
-                    })
-                elif chosen_time >= quarter_limit:
-                    key = f"{current}|no_checkout_quarter"
-                    results["no_checkout_days"].append({
-                        "date": current, "day": day_name,
-                        "punch_time": chosen_time,
-                        "all_punches": [p.time() for p in all_punches],
-                        "punch_count": punch_count,
-                        "delay": f"تأخر {_diff_min(required_time, chosen_time)} دقيقة",
-                        "has_delay": True,
-                        "type": "quarter",
-                        "excused": key in excused_keys, "key": key
-                    })
-                else:
-                    key = f"{current}|no_checkout"
-                    results["no_checkout_days"].append({
-                        "date": current, "day": day_name,
-                        "punch_time": chosen_time,
-                        "all_punches": [p.time() for p in all_punches],
-                        "punch_count": punch_count,
-                        "delay": "بدون تأخير",
-                        "has_delay": False,
-                        "type": "on_time",
-                        "excused": key in excused_keys, "key": key
-                    })
+                # تصنيف حسب التأخر + بصمة دخول فقط
+                key = f"{current}|no_checkout"
+                results["no_checkout_days"].append({
+                    "date": current, "day": day_name,
+                    "punch_time": chosen_time,
+                    "all_punches": [p.time() for p in all_punches],
+                    "punch_count": punch_count,
+                    "delay": f"تأخر {_diff_min(required_time, chosen_time)} دقيقة" if chosen_time >= quarter_limit else "بدون تأخير",
+                    "delay_type": "half" if chosen_time >= half_limit else ("quarter" if chosen_time >= quarter_limit else "on_time"),
+                    "excused": key in excused_keys, 
+                    "key": key,
+                    "checkout_excused": False  # للتحكم المستقل في خصم بدون خروج
+                })
             elif chosen_time >= half_limit:
                 key = f"{current}|half"
                 results["half_deductions"].append({
@@ -243,25 +225,16 @@ def analyze_attendance(df_parsed, start_date, end_date, required_time, off_days,
     eff_quarter = sum(1 for d in results["quarter_deductions"] if not d["excused"])
     eff_half = sum(1 for d in results["half_deductions"] if not d["excused"])
     
-    # حساب خصم عدم وجود بصمة خروج مع حساب التأخر
-    # ربع يوم + نصف يوم إضافي (المجموع 3/4)
-    eff_no_checkout_quarter = sum(1 for d in results["no_checkout_days"] if not d["excused"] and d.get("type") == "quarter")
-    no_checkout_quarter_deduction = eff_no_checkout_quarter * (day_rate * 3 / 4)  # ربع + نصف
-    
-    # نصف يوم + نصف يوم إضافي (المجموع يوم كامل)
-    eff_no_checkout_half = sum(1 for d in results["no_checkout_days"] if not d["excused"] and d.get("type") == "half")
-    no_checkout_half_deduction = eff_no_checkout_half * day_rate  # نصف + نصف = يوم كامل
-    
-    # بدون تأخير + نصف يوم إضافي
-    eff_no_checkout = sum(1 for d in results["no_checkout_days"] if not d["excused"] and d.get("type") == "on_time")
+    # حساب خصم عدم وجود بصمة خروج منفصل
+    eff_no_checkout = sum(1 for d in results["no_checkout_days"] if not d["checkout_excused"])
     no_checkout_deduction = eff_no_checkout * (day_rate / 2)
 
     absent_deduction = eff_absent * day_rate
     quarter_deduction = eff_quarter * (day_rate / 4)
     half_deduction = eff_half * (day_rate / 2)
-    total_auto = absent_deduction + quarter_deduction + half_deduction + no_checkout_quarter_deduction + no_checkout_half_deduction + no_checkout_deduction
+    total_auto = absent_deduction + quarter_deduction + half_deduction + no_checkout_deduction
 
-    return results, day_rate, absent_deduction, quarter_deduction, half_deduction, no_checkout_quarter_deduction, no_checkout_half_deduction, no_checkout_deduction, total_auto
+    return results, day_rate, absent_deduction, quarter_deduction, half_deduction, no_checkout_deduction, total_auto
 
 
 def _diff_min(t1, t2):
@@ -275,7 +248,7 @@ def fmt_punches(punches):
 
 
 # ─── SESSION STATE ──────────────────────────────────────────────────────────
-for k, v in [("excused_keys", set()), ("excused_reasons", {}),
+for k, v in [("excused_keys", set()), ("checkout_excused_keys", set()), ("excused_reasons", {}),
               ("analysis_done", False), ("df_parsed", None), ("params", {})]:
     if k not in st.session_state:
         st.session_state[k] = v
@@ -341,6 +314,7 @@ with st.sidebar:
                 df_parsed = parse_attendance(df_raw)
                 st.session_state.df_parsed = df_parsed
                 st.session_state.excused_keys = set()
+                st.session_state.checkout_excused_keys = set()
                 st.session_state.excused_reasons = {}
                 st.session_state.analysis_done = True
                 st.session_state.params = {
@@ -371,9 +345,9 @@ if not st.session_state.analysis_done:
         <ul style='color:#a0aec0;line-height:2.2;'>
             <li>🔵 <strong style='color:#4facfe;'>اختيار البصمة:</strong> إذا كان اليوم به أكثر من بصمة، تُستخدم البصمة الأبكر في اليوم</li>
             <li>🔴 غياب كامل → خصم يوم كامل (لا توجد أي بصمة)</li>
-            <li>🟡 تأخر 15–29 دقيقة → خصم ربع يوم</li>
-            <li>🟠 تأخر 30 دقيقة أو أكثر → خصم نصف يوم</li>
-            <li>⚪ بصمة دخول بدون خروج + تأخر → خصم التأخير + نصف يوم إضافي</li>
+            <li>🟡 تأخر 15–29 دقيقة → خصم ربع يوم (منفصل)</li>
+            <li>🟠 تأخر 30 دقيقة أو أكثر → خصم نصف يوم (منفصل)</li>
+            <li>⚪ بصمة دخول بدون خروج → خصم نصف يوم إضافي (منفصل - يمكن إلغاؤه)</li>
             <li>✅ عذر مقبول → لا خصم</li>
             <li>💵 سعر اليوم = الراتب ÷ 30</li>
         </ul>
@@ -394,7 +368,7 @@ else:
     ]
     emp_name = st.session_state.df_parsed["Name"].iloc[0]
 
-    results, day_rate, absent_deduction, quarter_deduction, half_deduction, no_checkout_quarter_deduction, no_checkout_half_deduction, no_checkout_deduction, total_auto = analyze_attendance(
+    results, day_rate, absent_deduction, quarter_deduction, half_deduction, no_checkout_deduction, total_auto = analyze_attendance(
         df_range, s_date, e_date, req_time, off_days, sal, st.session_state.excused_keys
     )
 
@@ -415,8 +389,8 @@ else:
 
         TYPE_LABEL = {
             "absent": ("🔴 غياب", "#fc5c7d"),
-            "quarter": ("🟡 ربع يوم", "#f7971e"),
-            "half": ("🟠 نصف يوم", "#fd7238"),
+            "quarter": ("🟡 ربع يوم (تأخر 15-29)", "#f7971e"),
+            "half": ("🟠 نصف يوم (تأخر 30+)", "#fd7238"),
             "no_checkout": ("⚪ بدون خروج", "#cbd5e0")
         }
 
@@ -427,24 +401,26 @@ else:
 
             col_chk, col_info, col_reason = st.columns([1, 4, 4])
             with col_chk:
-                checked = st.checkbox("عذر", value=(key in st.session_state.excused_keys),
-                                      key=f"chk_{key}", label_visibility="collapsed")
+                if vtype == "no_checkout":
+                    # لـ بصمة دخول بدون خروج، نسمح بالإعفاء المنفصل
+                    checked = st.checkbox("عذر", value=(key in st.session_state.checkout_excused_keys),
+                                          key=f"chk_{key}", label_visibility="collapsed")
+                else:
+                    checked = st.checkbox("عذر", value=(key in st.session_state.excused_keys),
+                                          key=f"chk_{key}", label_visibility="collapsed")
             with col_info:
                 punch_detail = ""
                 if vtype != "absent" and d.get("all_punches"):
-                    all_p = " ، ".join(p.strftime("%H:%M:%S") for p in d["all_punches"])
                     chosen = d["punch_time"].strftime("%H:%M:%S")
-                    count = d.get("punch_count", 1)
                     punch_detail = f"<br><span style='color:#4facfe;font-size:0.8rem;'>🔵 بصمة: {chosen}</span>"
                     if vtype == "no_checkout":
-                        checkout_note = ""
-                        if d.get("type") == "half":
-                            checkout_note = "(تأخر 30+ دقيقة + بدون خروج)"
-                        elif d.get("type") == "quarter":
-                            checkout_note = "(تأخر 15-29 دقيقة + بدون خروج)"
+                        delay_type = d.get("delay_type", "on_time")
+                        if delay_type == "half":
+                            punch_detail += f"<span style='color:#fd7238;font-size:0.8rem;'> (تأخر 30+ دقيقة + بدون خروج)</span>"
+                        elif delay_type == "quarter":
+                            punch_detail += f"<span style='color:#f7971e;font-size:0.8rem;'> (تأخر 15-29 دقيقة + بدون خروج)</span>"
                         else:
-                            checkout_note = "(بدون تأخير + بدون خروج)"
-                        punch_detail += f"<span style='color:#f7971e;font-size:0.8rem;'> {checkout_note}</span>"
+                            punch_detail += f"<span style='color:#cbd5e0;font-size:0.8rem;'> (بدون تأخير + بدون خروج)</span>"
 
                 st.markdown(f"""
                 <div style='padding:8px 0;direction:rtl;'>
@@ -464,11 +440,17 @@ else:
                     st.markdown("<div style='height:38px;'></div>", unsafe_allow_html=True)
 
             if checked:
-                st.session_state.excused_keys.add(key)
+                if vtype == "no_checkout":
+                    st.session_state.checkout_excused_keys.add(key)
+                else:
+                    st.session_state.excused_keys.add(key)
             else:
-                st.session_state.excused_keys.discard(key)
+                if vtype == "no_checkout":
+                    st.session_state.checkout_excused_keys.discard(key)
+                else:
+                    st.session_state.excused_keys.discard(key)
 
-        excused_count = len(st.session_state.excused_keys)
+        excused_count = len(st.session_state.excused_keys) + len(st.session_state.checkout_excused_keys)
         if excused_count > 0:
             st.markdown(f"""
             <div style='background:rgba(56,239,125,0.1);border:1px solid rgba(56,239,125,0.4);
@@ -478,7 +460,11 @@ else:
             """, unsafe_allow_html=True)
 
         # Re-analyze after excuse updates
-        results, day_rate, absent_deduction, quarter_deduction, half_deduction, no_checkout_quarter_deduction, no_checkout_half_deduction, no_checkout_deduction, total_auto = analyze_attendance(
+        # تحديث checkout_excused في النتائج
+        for d in results["no_checkout_days"]:
+            d["checkout_excused"] = d["key"] in st.session_state.checkout_excused_keys
+        
+        results, day_rate, absent_deduction, quarter_deduction, half_deduction, no_checkout_deduction, total_auto = analyze_attendance(
             df_range, s_date, e_date, req_time, off_days, sal, st.session_state.excused_keys
         )
         st.markdown("---")
@@ -487,10 +473,8 @@ else:
     eff_absent = sum(1 for d in results["absent_days"] if not d["excused"])
     eff_quarter = sum(1 for d in results["quarter_deductions"] if not d["excused"])
     eff_half = sum(1 for d in results["half_deductions"] if not d["excused"])
-    eff_no_checkout_quarter = sum(1 for d in results["no_checkout_days"] if not d["excused"] and d.get("type") == "quarter")
-    eff_no_checkout_half = sum(1 for d in results["no_checkout_days"] if not d["excused"] and d.get("type") == "half")
-    eff_no_checkout = sum(1 for d in results["no_checkout_days"] if not d["excused"] and d.get("type") == "on_time")
-    excused_total = len(st.session_state.excused_keys)
+    eff_no_checkout = sum(1 for d in results["no_checkout_days"] if not d["checkout_excused"])
+    excused_total = len(st.session_state.excused_keys) + len(st.session_state.checkout_excused_keys)
 
     st.markdown(f"""
     <div class="section-header">
@@ -503,13 +487,13 @@ else:
     cols = st.columns(8)
     for col, val, lbl, sub, cls in [
         (cols[0], eff_absent,               "أيام الغياب",      "يوم",   "red-val"),
-        (cols[1], eff_quarter,              "ربع يوم خصم",      "مرة",   "yellow-val"),
-        (cols[2], eff_half,                 "نصف يوم خصم",      "مرة",   "orange-val"),
-        (cols[3], eff_no_checkout_quarter,  "بدون خروج+ربع",    "مرة",   "orange-val"),
-        (cols[4], eff_no_checkout_half,     "بدون خروج+نصف",    "مرة",   "orange-val"),
-        (cols[5], eff_no_checkout,          "بدون خروج فقط",    "مرة",   "orange-val"),
-        (cols[6], excused_total,            "أيام بعذر",        "معفي",  "teal-val"),
-        (cols[7], len(results["on_time_days"]), "حضور بالموعد", "يوم",   "green-val"),
+        (cols[1], eff_quarter,              "ربع يوم (15-29)",  "مرة",   "yellow-val"),
+        (cols[2], eff_half,                 "نصف يوم (30+)",    "مرة",   "orange-val"),
+        (cols[3], eff_no_checkout,          "بدون خروج",        "مرة",   "orange-val"),
+        (cols[4], excused_total,            "أيام بعذر",        "معفي",  "teal-val"),
+        (cols[5], f"{day_rate:.0f}",        "سعر اليوم",        "جنيه",  "blue-val"),
+        (cols[6], len(results["on_time_days"]), "حضور بالموعد", "يوم",   "green-val"),
+        (cols[7], eff_quarter + eff_half + eff_no_checkout, "إجمالي الخصومات", "مرة", "red-val"),
     ]:
         col.markdown(f"""<div class="metric-card">
             <div class="metric-label">{lbl}</div>
@@ -556,7 +540,7 @@ else:
         # Quarter Day Deduction
         st.markdown(f"""
         <div class="breakdown-row">
-            <span class="breakdown-label">خصم ربع يوم ({eff_quarter} × {day_rate/4:.1f})</span>
+            <span class="breakdown-label">خصم ربع يوم 15-29 دقيقة ({eff_quarter} × {day_rate/4:.1f})</span>
             <span class="breakdown-deduction">- {quarter_deduction:,.1f} جنيه</span>
         </div>
         """, unsafe_allow_html=True)
@@ -564,31 +548,15 @@ else:
         # Half Day Deduction
         st.markdown(f"""
         <div class="breakdown-row">
-            <span class="breakdown-label">خصم نصف يوم ({eff_half} × {day_rate/2:.1f})</span>
+            <span class="breakdown-label">خصم نصف يوم 30+ دقيقة ({eff_half} × {day_rate/2:.1f})</span>
             <span class="breakdown-deduction">- {half_deduction:,.1f} جنيه</span>
         </div>
         """, unsafe_allow_html=True)
         
-        # No Checkout Quarter Deduction
+        # No Checkout Deduction (منفصل)
         st.markdown(f"""
         <div class="breakdown-row">
-            <span class="breakdown-label">بدون خروج + ربع يوم ({eff_no_checkout_quarter} × {day_rate*3/4:.1f})</span>
-            <span class="breakdown-deduction">- {no_checkout_quarter_deduction:,.1f} جنيه</span>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # No Checkout Half Deduction
-        st.markdown(f"""
-        <div class="breakdown-row">
-            <span class="breakdown-label">بدون خروج + نصف يوم ({eff_no_checkout_half} × {day_rate:.1f})</span>
-            <span class="breakdown-deduction">- {no_checkout_half_deduction:,.1f} جنيه</span>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # No Checkout Deduction
-        st.markdown(f"""
-        <div class="breakdown-row">
-            <span class="breakdown-label">بدون خروج فقط ({eff_no_checkout} × {day_rate/2:.1f})</span>
+            <span class="breakdown-label">خصم بدون بصمة خروج ({eff_no_checkout} × {day_rate/2:.1f})</span>
             <span class="breakdown-deduction">- {no_checkout_deduction:,.1f} جنيه</span>
         </div>
         """, unsafe_allow_html=True)
@@ -640,22 +608,31 @@ else:
         """, unsafe_allow_html=True)
 
     # ── Excused detail ─────────────────────────────────────────────────────────
-    if st.session_state.excused_keys:
+    if st.session_state.excused_keys or st.session_state.checkout_excused_keys:
         with st.expander(f"✅ تفاصيل الأيام المعفوة ({excused_total} بند)"):
             for vtype, d in all_violations:
-                if d["key"] in st.session_state.excused_keys:
+                if vtype == "no_checkout" and d["key"] in st.session_state.checkout_excused_keys:
                     reason = st.session_state.excused_reasons.get(d["key"], "—")
-                    lbl_map = {"absent":("غياب","#fc5c7d"),"quarter":("ربع يوم","#f7971e"),"half":("نصف يوم","#fd7238"),"no_checkout":("بدون خروج","#cbd5e0")}
-                    if vtype == "no_checkout":
-                        type_label = d.get("type", "on_time")
-                        if type_label == "quarter":
-                            lbl, clr = ("ربع يوم + بدون خروج", "#f7971e")
-                        elif type_label == "half":
-                            lbl, clr = ("نصف يوم + بدون خروج", "#fd7238")
-                        else:
-                            lbl, clr = ("بدون خروج فقط", "#cbd5e0")
+                    delay_type = d.get("delay_type", "on_time")
+                    if delay_type == "half":
+                        lbl, clr = ("نصف يوم (30+) + بدون خروج", "#fd7238")
+                    elif delay_type == "quarter":
+                        lbl, clr = ("ربع يوم (15-29) + بدون خروج", "#f7971e")
                     else:
-                        lbl, clr = lbl_map.get(vtype, ("", "#fff"))
+                        lbl, clr = ("بدون خروج فقط", "#cbd5e0")
+                    st.markdown(f"""
+                    <div class="excuse-box">
+                        <span style='color:#38ef7d;font-weight:700;'>{d['date'].strftime('%d/%m/%Y')} ({d['day']})</span>
+                        &nbsp;|&nbsp;
+                        <span style='color:{clr};font-weight:600;'>{lbl}</span>
+                        &nbsp;|&nbsp;
+                        <span style='color:#a0aec0;'>العذر: {reason if reason else "لم يُذكر"}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                elif vtype != "no_checkout" and d["key"] in st.session_state.excused_keys:
+                    reason = st.session_state.excused_reasons.get(d["key"], "—")
+                    lbl_map = {"absent":("غياب","#fc5c7d"),"quarter":("ربع يوم (15-29)","#f7971e"),"half":("نصف يوم (30+)","#fd7238")}
+                    lbl, clr = lbl_map.get(vtype, ("", "#fff"))
                     st.markdown(f"""
                     <div class="excuse-box">
                         <span style='color:#38ef7d;font-weight:700;'>{d['date'].strftime('%d/%m/%Y')} ({d['day']})</span>
@@ -670,7 +647,7 @@ else:
     active_absent = [d for d in results["absent_days"] if not d["excused"]]
     active_quarter = [d for d in results["quarter_deductions"] if not d["excused"]]
     active_half = [d for d in results["half_deductions"] if not d["excused"]]
-    active_no_checkout = [d for d in results["no_checkout_days"] if not d["excused"]]
+    active_no_checkout = [d for d in results["no_checkout_days"] if not d["checkout_excused"]]
 
     if active_absent:
         st.markdown('<div class="section-header">🔴 تفاصيل أيام الغياب</div>', unsafe_allow_html=True)
@@ -715,28 +692,25 @@ else:
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
     if active_no_checkout:
-        st.markdown('<div class="section-header">⚪ تفاصيل بصمة دخول بدون خروج</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-header">⚪ تفاصيل بصمة دخول بدون خروج (خصم منفصل)</div>', unsafe_allow_html=True)
         rows = []
         for i, d in enumerate(active_no_checkout):
             all_p = " ، ".join(p.strftime("%H:%M:%S") for p in d.get("all_punches", []))
-            type_label = d.get("type", "on_time")
-            if type_label == "quarter":
-                deduction_desc = f"ربع يوم + نصف يوم = {day_rate*3/4:.1f}"
-                total_deduction = f"{day_rate*3/4:.1f} جنيه"
-            elif type_label == "half":
-                deduction_desc = f"نصف يوم + نصف يوم = {day_rate:.1f}"
-                total_deduction = f"{day_rate:.1f} جنيه"
+            delay_type = d.get("delay_type", "on_time")
+            if delay_type == "half":
+                delay_note = "تأخر 30+ دقيقة + بدون خروج"
+            elif delay_type == "quarter":
+                delay_note = "تأخر 15-29 دقيقة + بدون خروج"
             else:
-                deduction_desc = f"نصف يوم فقط = {day_rate/2:.1f}"
-                total_deduction = f"{day_rate/2:.1f} جنيه"
+                delay_note = "بدون تأخير + بدون خروج"
             rows.append({
                 "#": i+1,
                 "التاريخ": d["date"].strftime("%d/%m/%Y"),
                 "اليوم": d["day"],
                 "🔵 بصمة الدخول": d["punch_time"].strftime("%H:%M:%S"),
+                "الملاحظة": delay_note,
                 "التأخير": d["delay"],
-                "تفاصيل الخصم": deduction_desc,
-                "الخصم": total_deduction
+                "الخصم": f"{day_rate/2:.1f} جنيه"
             })
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
@@ -765,33 +739,32 @@ else:
         # ملخص الراتب
         all_data.append(["---", "===== ملخص الراتب =====", "", ""])
         salary_summary = pd.DataFrame({
-            "البيان": ["الراتب الأساسي","خصم الغياب","خصم ربع يوم","خصم نصف يوم",
-                       "بدون خروج + ربع يوم","بدون خروج + نصف يوم","بدون خروج فقط",
+            "البيان": ["الراتب الأساسي","خصم الغياب","خصم ربع يوم (15-29)","خصم نصف يوم (30+)","خصم بدون خروج",
                        "أيام معفوة بعذر","خصومات إضافية","السلفة","حوافز وإضافات","إجمالي الخصومات","الراتب المستحق"],
-            "القيمة (جنيه)": [sal,-absent_deduction,-quarter_deduction,-half_deduction,
-                               -no_checkout_quarter_deduction,-no_checkout_half_deduction,-no_checkout_deduction,
+            "القيمة (جنيه)": [sal,-absent_deduction,-quarter_deduction,-half_deduction,-no_checkout_deduction,
                                0,-extra_deductions,-advance,incentives,-total_deductions,net_salary],
-            "ملاحظة": ["","","","","","","",f"{excused_total} بند",extra_deductions_note,advance_note,incentives_note,"",""]
+            "ملاحظة": ["","","","","",f"{excused_total} بند",extra_deductions_note,advance_note,incentives_note,"",""]
         })
         all_data.append(salary_summary)
         all_data.append(["", "", "", ""])
         
         # أيام معفوة
-        if st.session_state.excused_keys:
+        if st.session_state.excused_keys or st.session_state.checkout_excused_keys:
             all_data.append(["---", "===== الأيام المعفوة =====", "", ""])
             excused_rows = []
             for vtype, d in all_violations:
-                if d["key"] in st.session_state.excused_keys:
-                    if vtype == "no_checkout":
-                        type_label = d.get("type", "on_time")
-                        if type_label == "quarter":
-                            lbl = "ربع يوم + بدون خروج"
-                        elif type_label == "half":
-                            lbl = "نصف يوم + بدون خروج"
-                        else:
-                            lbl = "بدون خروج فقط"
+                if vtype == "no_checkout" and d["key"] in st.session_state.checkout_excused_keys:
+                    delay_type = d.get("delay_type", "on_time")
+                    if delay_type == "half":
+                        lbl = "نصف يوم (30+) + بدون خروج"
+                    elif delay_type == "quarter":
+                        lbl = "ربع يوم (15-29) + بدون خروج"
                     else:
-                        lbl = {"absent":"غياب","quarter":"ربع يوم","half":"نصف يوم"}[vtype]
+                        lbl = "بدون خروج فقط"
+                    excused_rows.append({"التاريخ":d["date"].strftime("%d/%m/%Y"),"اليوم":d["day"],
+                                         "نوع المخالفة":lbl,"السبب":st.session_state.excused_reasons.get(d["key"],"—")})
+                elif vtype != "no_checkout" and d["key"] in st.session_state.excused_keys:
+                    lbl = {"absent":"غياب","quarter":"ربع يوم (15-29)","half":"نصف يوم (30+)"}[vtype]
                     excused_rows.append({"التاريخ":d["date"].strftime("%d/%m/%Y"),"اليوم":d["day"],
                                          "نوع المخالفة":lbl,"السبب":st.session_state.excused_reasons.get(d["key"],"—")})
             all_data.append(pd.DataFrame(excused_rows))
@@ -824,22 +797,19 @@ else:
         
         # بدون خروج
         if active_no_checkout:
-            all_data.append(["---", "===== بصمة دخول بدون خروج =====", "", ""])
+            all_data.append(["---", "===== بصمة دخول بدون خروج (منفصل) =====", "", ""])
             no_checkout_rows = []
             for d in active_no_checkout:
-                type_label = d.get("type", "on_time")
-                if type_label == "quarter":
-                    deduction = day_rate*3/4
-                    deduction_desc = f"ربع يوم + نصف يوم"
-                elif type_label == "half":
-                    deduction = day_rate
-                    deduction_desc = f"نصف يوم + نصف يوم"
+                delay_type = d.get("delay_type", "on_time")
+                if delay_type == "half":
+                    delay_note = "تأخر 30+ دقيقة + بدون خروج"
+                elif delay_type == "quarter":
+                    delay_note = "تأخر 15-29 دقيقة + بدون خروج"
                 else:
-                    deduction = day_rate/2
-                    deduction_desc = "نصف يوم فقط"
+                    delay_note = "بدون تأخير + بدون خروج"
                 no_checkout_rows.append({"التاريخ":d["date"].strftime("%d/%m/%Y"),"اليوم":d["day"],
                                "بصمة الدخول":d["punch_time"].strftime("%H:%M:%S"),
-                               "التأخير":d["delay"],"تفاصيل الخصم":deduction_desc,"الخصم":deduction})
+                               "الملاحظة":delay_note,"التأخير":d["delay"],"الخصم":day_rate/2})
             all_data.append(pd.DataFrame(no_checkout_rows))
             all_data.append(["", "", "", ""])
         
