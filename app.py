@@ -445,39 +445,39 @@ else:
                        f"<span style='color:#38ef7d;font-weight:600;'>✅ {excused_total} بند</span></div>"
                        if excused_total > 0 else "")
         st.markdown(f"""
-        <div style='background:#1a1a2e;border-radius:12px;padding:20px;border:1px solid rgba(255,255,255,0.1);direction:rtl;'>
-            <h4 style='color:#4facfe;margin-top:0;'>📊 تفاصيل الخصومات</h4>
-            <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
-                <span style='color:#a0aec0;'>الراتب الأساسي</span>
-                <span style='color:white;font-weight:600;'>{sal:,.1f} جنيه</span>
-            </div>
-            {excuse_line}
-            <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
-                <span style='color:#a0aec0;'>خصم الغياب ({eff_absent} × {day_rate:.1f})</span>
-                <span style='color:#fc5c7d;font-weight:600;'>- {absent_deduction:,.1f} جنيه</span>
-            </div>
-            <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
-                <span style='color:#a0aec0;'>خصم ربع يوم ({eff_quarter} × {day_rate/4:.1f})</span>
-                <span style='color:#f7971e;font-weight:600;'>- {quarter_deduction:,.1f} جنيه</span>
-            </div>
-            <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
-                <span style='color:#a0aec0;'>خصم نصف يوم ({eff_half} × {day_rate/2:.1f})</span>
-                <span style='color:#fd7238;font-weight:600;'>- {half_deduction:,.1f} جنيه</span>
-            </div>
-            <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
-                <span style='color:#a0aec0;'>خصومات إضافية {f"({extra_deductions_note})" if extra_deductions_note else ""}</span>
-                <span style='color:#fc5c7d;font-weight:600;'>- {extra_deductions:,.1f} جنيه</span>
-            </div>
-            <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
-                <span style='color:#a0aec0;'>حوافز وإضافات {f"({incentives_note})" if incentives_note else ""}</span>
-                <span style='color:#38ef7d;font-weight:600;'>+ {incentives:,.1f} جنيه</span>
-            </div>
-            <div style='display:flex;justify-content:space-between;padding:12px 0 0 0;'>
-                <span style='color:white;font-weight:700;font-size:1.1rem;'>إجمالي الخصومات</span>
-                <span style='color:#fc5c7d;font-weight:700;font-size:1.1rem;'>- {total_deductions:,.1f} جنيه</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+<div style='background:#1a1a2e;border-radius:12px;padding:20px;border:1px solid rgba(255,255,255,0.1);direction:rtl;'>
+    <h4 style='color:#4facfe;margin-top:0;'>📊 تفاصيل الخصومات</h4>
+    <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
+        <span style='color:#a0aec0;'>الراتب الأساسي</span>
+        <span style='color:white;font-weight:600;'>{sal:,.1f} جنيه</span>
+    </div>
+    {excuse_line}
+    <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
+        <span style='color:#a0aec0;'>خصم الغياب ({eff_absent} × {day_rate:.1f})</span>
+        <span style='color:#fc5c7d;font-weight:600;'>- {absent_deduction:,.1f} جنيه</span>
+    </div>
+    <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
+        <span style='color:#a0aec0;'>خصم ربع يوم ({eff_quarter} × {day_rate/4:.1f})</span>
+        <span style='color:#f7971e;font-weight:600;'>- {quarter_deduction:,.1f} جنيه</span>
+    </div>
+    <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
+        <span style='color:#a0aec0;'>خصم نصف يوم ({eff_half} × {day_rate/2:.1f})</span>
+        <span style='color:#fd7238;font-weight:600;'>- {half_deduction:,.1f} جنيه</span>
+    </div>
+    <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
+        <span style='color:#a0aec0;'>خصومات إضافية {f"({extra_deductions_note})" if extra_deductions_note else ""}</span>
+        <span style='color:#fc5c7d;font-weight:600;'>- {extra_deductions:,.1f} جنيه</span>
+    </div>
+    <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
+        <span style='color:#a0aec0;'>حوافز وإضافات {f"({incentives_note})" if incentives_note else ""}</span>
+        <span style='color:#38ef7d;font-weight:600;'>+ {incentives:,.1f} جنيه</span>
+    </div>
+    <div style='display:flex;justify-content:space-between;padding:12px 0 0 0;'>
+        <span style='color:white;font-weight:700;font-size:1.1rem;'>إجمالي الخصومات</span>
+        <span style='color:#fc5c7d;font-weight:700;font-size:1.1rem;'>- {total_deductions:,.1f} جنيه</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
     with s2:
         st.markdown(f"""
