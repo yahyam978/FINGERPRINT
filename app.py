@@ -128,8 +128,8 @@ def analyze_attendance(df_parsed, start_date, end_date, required_time, off_days,
 
     results = {"absent_days": [], "quarter_deductions": [], "half_deductions": [], "on_time_days": []}
     req_dt_base = datetime.combine(date.today(), required_time)
-    quarter_limit = (req_dt_base + timedelta(minutes=15)).time()
-    half_limit = (req_dt_base + timedelta(minutes=30)).time()
+    quarter_limit = (req_dt_base + timedelta(minutes=16)).time()
+    half_limit = (req_dt_base + timedelta(minutes=31)).time()
 
     current = start_date
     while current <= end_date:
