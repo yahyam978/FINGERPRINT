@@ -86,7 +86,6 @@ def parse_attendance(df):
 
     def clean_dt(val):
         s = str(val).strip()
-        # توحيد رموز الصباح والمساء الخاصة بأجهزة البصمة
         s = s.replace('Õ', 'AM').replace('ã', 'PM')
         s = s.replace('ص', 'AM').replace('م', 'PM')
         
@@ -112,9 +111,6 @@ def parse_attendance(df):
 
 
 def pick_checkin_punch(punches, required_time, current_date):
-    """
-    اختيار البصمة الأبكر في اليوم لتكون هي بصمة الحضور
-    """
     punches = sorted(punches)
     return punches[0], len(punches)
 
@@ -123,7 +119,6 @@ def analyze_attendance(df_parsed, start_date, end_date, required_time, off_days,
     if excused_keys is None:
         excused_keys = set()
 
-    # تمت إضافة "no_checkout_deductions" لفصل بصمات الخروج الناقصة
     results = {"absent_days": [], "quarter_deductions": [], "half_deductions": [], "no_checkout_deductions": [], "on_time_days": []}
     req_dt_base = datetime.combine(date.today(), required_time)
     quarter_limit = (req_dt_base + timedelta(minutes=15)).time()
@@ -151,7 +146,7 @@ def analyze_attendance(df_parsed, start_date, end_date, required_time, off_days,
             chosen_dt, punch_count = pick_checkin_punch(all_punches, required_time, current)
             chosen_time = chosen_dt.time()
 
-            # 1. تقييم التأخير الصباحي (بشكل منفصل)
+            # 1. تقييم التأخير الصباحي
             if chosen_time >= half_limit:
                 key = f"{current}|half"
                 results["half_deductions"].append({
@@ -180,7 +175,7 @@ def analyze_attendance(df_parsed, start_date, end_date, required_time, off_days,
                     "punch_count": punch_count,
                 })
 
-            # 2. تقييم الخروج (بشكل منفصل تماماً، يسمح بوجود المخالفتين معاً)
+            # 2. تقييم بصمة الخروج
             if punch_count == 1:
                 key_nc = f"{current}|nocheckout"
                 results["no_checkout_deductions"].append({
@@ -203,7 +198,7 @@ def analyze_attendance(df_parsed, start_date, end_date, required_time, off_days,
     absent_deduction = eff_absent * day_rate
     quarter_deduction = eff_quarter * (day_rate / 4)
     half_deduction = eff_half * (day_rate / 2)
-    nocheckout_deduction = eff_nocheckout * (day_rate / 4) # خصم ربع يوم لعدم الخروج
+    nocheckout_deduction = eff_nocheckout * (day_rate / 4) 
 
     total_auto = absent_deduction + quarter_deduction + half_deduction + nocheckout_deduction
 
@@ -247,12 +242,12 @@ with st.sidebar:
     st.caption(f"⏰ موعد الحضور: {required_time.strftime('%H:%M')}")
 
     st.markdown("""
-    <div style='background:rgba(79,172,254,0.1);border:1px solid rgba(79,172,254,0.3);
-                border-radius:8px;padding:10px;direction:rtl;font-size:0.8rem;color:#a0aec0;margin-top:8px;'>
-        💡 إذا كان اليوم يحتوي على أكثر من بصمة، يتم اختيار <strong style='color:#4facfe;'>البصمة الأبكر في اليوم</strong>
-        كبصمة الحضور الفعلية، وتقييم بصمة الخروج من وجود بصمة ثانية.
-    </div>
-    """, unsafe_allow_html=True)
+<div style='background:rgba(79,172,254,0.1);border:1px solid rgba(79,172,254,0.3);
+            border-radius:8px;padding:10px;direction:rtl;font-size:0.8rem;color:#a0aec0;margin-top:8px;'>
+    💡 إذا كان اليوم يحتوي على أكثر من بصمة، يتم اختيار <strong style='color:#4facfe;'>البصمة الأبكر في اليوم</strong>
+    كبصمة الحضور الفعلية، وتقييم بصمة الخروج من وجود بصمة ثانية.
+</div>
+""", unsafe_allow_html=True)
 
     st.markdown("---")
     off_days_selected = st.multiselect("أيام الإجازة الأسبوعية", options=DAYS_EN, default=["الجمعة", "السبت"])
@@ -301,28 +296,28 @@ with st.sidebar:
 if not st.session_state.analysis_done:
     st.info("👈 يرجى رفع ملف الحضور من الشريط الجانبي للبدء")
     st.markdown("""
-    <div style='background:#1a1a2e;border-radius:12px;padding:25px;border:1px solid rgba(255,255,255,0.1);direction:rtl;margin-top:20px;'>
-        <h3 style='color:#4facfe;margin-top:0;'>📌 كيفية استخدام النظام</h3>
-        <ol style='color:#a0aec0;line-height:2.5;'>
-            <li>ارفع ملف الحضور (XLS/XLSX)</li>
-            <li>حدد موعد الحضور وأيام الإجازة والفترة الزمنية والراتب</li>
-            <li>اضغط "تحليل الحضور"</li>
-            <li>اختر الأيام المعفوة بعذر وأدخل السبب (تم فصل خصم التأخير عن خصم بدون خروج)</li>
-            <li>راجع النتائج وحمّل التقرير</li>
-        </ol>
-        <hr style='border-color:rgba(255,255,255,0.1);'/>
-        <h4 style='color:#f7971e;'>📐 قواعد الحساب</h4>
-        <ul style='color:#a0aec0;line-height:2.2;'>
-            <li>🔵 <strong style='color:#4facfe;'>اختيار البصمة:</strong> تُستخدم البصمة الأبكر في اليوم كبصمة الحضور</li>
-            <li>🔴 غياب كامل → خصم يوم كامل (لا توجد أي بصمة)</li>
-            <li>🟡 تأخر 15–29 دقيقة → خصم ربع يوم</li>
-            <li>🟠 تأخر 30 دقيقة أو أكثر → خصم نصف يوم</li>
-            <li>⚪ بدون خروج (بصمة واحدة فقط في اليوم) → خصم ربع يوم إضافي (مستقل عن التأخير)</li>
-            <li>✅ عذر مقبول → لا خصم</li>
-            <li>💵 سعر اليوم = الراتب ÷ 30</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+<div style='background:#1a1a2e;border-radius:12px;padding:25px;border:1px solid rgba(255,255,255,0.1);direction:rtl;margin-top:20px;'>
+    <h3 style='color:#4facfe;margin-top:0;'>📌 كيفية استخدام النظام</h3>
+    <ol style='color:#a0aec0;line-height:2.5;'>
+        <li>ارفع ملف الحضور (XLS/XLSX)</li>
+        <li>حدد موعد الحضور وأيام الإجازة والفترة الزمنية والراتب</li>
+        <li>اضغط "تحليل الحضور"</li>
+        <li>اختر الأيام المعفوة بعذر وأدخل السبب (تم فصل خصم التأخير عن خصم بدون خروج)</li>
+        <li>راجع النتائج وحمّل التقرير</li>
+    </ol>
+    <hr style='border-color:rgba(255,255,255,0.1);'/>
+    <h4 style='color:#f7971e;'>📐 قواعد الحساب</h4>
+    <ul style='color:#a0aec0;line-height:2.2;'>
+        <li>🔵 <strong style='color:#4facfe;'>اختيار البصمة:</strong> تُستخدم البصمة الأبكر في اليوم كبصمة الحضور</li>
+        <li>🔴 غياب كامل → خصم يوم كامل (لا توجد أي بصمة)</li>
+        <li>🟡 تأخر 15–29 دقيقة → خصم ربع يوم</li>
+        <li>🟠 تأخر 30 دقيقة أو أكثر → خصم نصف يوم</li>
+        <li>⚪ بدون خروج (بصمة واحدة فقط في اليوم) → خصم ربع يوم إضافي (مستقل عن التأخير)</li>
+        <li>✅ عذر مقبول → لا خصم</li>
+        <li>💵 سعر اليوم = الراتب ÷ 30</li>
+    </ul>
+</div>
+""", unsafe_allow_html=True)
 
 else:
     p = st.session_state.params
@@ -338,7 +333,6 @@ else:
     ]
     emp_name = st.session_state.df_parsed["Name"].iloc[0]
 
-    # استقبال جميع المتغيرات العائدة من دالة التحليل
     results, day_rate, absent_deduction, quarter_deduction, half_deduction, nocheckout_deduction, total_auto = analyze_attendance(
         df_range, s_date, e_date, req_time, off_days, sal, st.session_state.excused_keys
     )
@@ -349,7 +343,6 @@ else:
         [("half", d) for d in results["half_deductions"]] +
         [("nocheckout", d) for d in results["no_checkout_deductions"]]
     )
-    # ترتيب المخالفات بالتاريخ
     all_violations.sort(key=lambda x: x[1]["date"])
 
     # ── Excuse section ──────────────────────────────────────────────────────────
@@ -386,13 +379,13 @@ else:
                         punch_detail += f"<span style='color:#718096;font-size:0.78rem;'> | كل البصمات: {all_p}</span>"
 
                 st.markdown(f"""
-                <div style='padding:8px 0;direction:rtl;'>
-                    <span style='color:{label_color};font-weight:700;'>{label_text}</span>
-                    <span style='color:white;font-weight:600;'> — {date_str} ({d['day']})</span>
-                    {"<span style='color:#a0aec0;font-size:0.85rem;'> | " + d.get('delay','') + "</span>" if vtype != 'absent' else ""}
-                    {punch_detail}
-                </div>
-                """, unsafe_allow_html=True)
+<div style='padding:8px 0;direction:rtl;'>
+    <span style='color:{label_color};font-weight:700;'>{label_text}</span>
+    <span style='color:white;font-weight:600;'> — {date_str} ({d['day']})</span>
+    {"<span style='color:#a0aec0;font-size:0.85rem;'> | " + d.get('delay','') + "</span>" if vtype != 'absent' else ""}
+    {punch_detail}
+</div>
+""", unsafe_allow_html=True)
             with col_reason:
                 if checked:
                     reason = st.text_input("سبب العذر", value=st.session_state.excused_reasons.get(key, ""),
@@ -410,11 +403,11 @@ else:
         excused_count = len(st.session_state.excused_keys)
         if excused_count > 0:
             st.markdown(f"""
-            <div style='background:rgba(56,239,125,0.1);border:1px solid rgba(56,239,125,0.4);
-                        border-radius:10px;padding:14px 18px;margin:10px 0;direction:rtl;'>
-                <span style='color:#38ef7d;font-weight:700;'>✅ تم التغاضي عن {excused_count} بند بعذر مقبول</span>
-            </div>
-            """, unsafe_allow_html=True)
+<div style='background:rgba(56,239,125,0.1);border:1px solid rgba(56,239,125,0.4);
+            border-radius:10px;padding:14px 18px;margin:10px 0;direction:rtl;'>
+    <span style='color:#38ef7d;font-weight:700;'>✅ تم التغاضي عن {excused_count} بند بعذر مقبول</span>
+</div>
+""", unsafe_allow_html=True)
 
         # إعادة الحساب بعد تحديث الأعذار
         results, day_rate, absent_deduction, quarter_deduction, half_deduction, nocheckout_deduction, total_auto = analyze_attendance(
@@ -447,11 +440,13 @@ else:
         (cols[5], f"{day_rate:.0f}",        "سعر اليوم",        "جنيه",  "blue-val"),
         (cols[6], len(results["on_time_days"]), "حضور بالموعد", "يوم",   "green-val"),
     ]:
-        col.markdown(f"""<div class="metric-card">
-            <div class="metric-label">{lbl}</div>
-            <div class="metric-value {cls}">{val}</div>
-            <div class="metric-label">{sub}</div>
-        </div>""", unsafe_allow_html=True)
+        col.markdown(f"""
+<div class="metric-card">
+    <div class="metric-label">{lbl}</div>
+    <div class="metric-value {cls}">{val}</div>
+    <div class="metric-label">{sub}</div>
+</div>
+""", unsafe_allow_html=True)
 
     # ── Salary breakdown ────────────────────────────────────────────────────────
     total_deductions = total_auto + extra_deductions
@@ -466,52 +461,52 @@ else:
                        f"<span style='color:#38ef7d;font-weight:600;'>✅ {excused_total} بند</span></div>"
                        if excused_total > 0 else "")
         st.markdown(f"""
-        <div style='background:#1a1a2e;border-radius:12px;padding:20px;border:1px solid rgba(255,255,255,0.1);direction:rtl;'>
-            <h4 style='color:#4facfe;margin-top:0;'>📊 تفاصيل الخصومات</h4>
-            <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
-                <span style='color:#a0aec0;'>الراتب الأساسي</span>
-                <span style='color:white;font-weight:600;'>{sal:,.1f} جنيه</span>
-            </div>
-            {excuse_line}
-            <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
-                <span style='color:#a0aec0;'>خصم الغياب ({eff_absent} × {day_rate:.1f})</span>
-                <span style='color:#fc5c7d;font-weight:600;'>- {absent_deduction:,.1f} جنيه</span>
-            </div>
-            <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
-                <span style='color:#a0aec0;'>خصم تأخير ربع يوم ({eff_quarter} × {day_rate/4:.1f})</span>
-                <span style='color:#f7971e;font-weight:600;'>- {quarter_deduction:,.1f} جنيه</span>
-            </div>
-            <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
-                <span style='color:#a0aec0;'>خصم تأخير نصف يوم ({eff_half} × {day_rate/2:.1f})</span>
-                <span style='color:#fd7238;font-weight:600;'>- {half_deduction:,.1f} جنيه</span>
-            </div>
-            <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
-                <span style='color:#a0aec0;'>خصم بدون خروج ({eff_nocheckout} × {day_rate/4:.1f})</span>
-                <span style='color:#b0c4de;font-weight:600;'>- {nocheckout_deduction:,.1f} جنيه</span>
-            </div>
-            <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
-                <span style='color:#a0aec0;'>خصومات إضافية {f"({extra_deductions_note})" if extra_deductions_note else ""}</span>
-                <span style='color:#fc5c7d;font-weight:600;'>- {extra_deductions:,.1f} جنيه</span>
-            </div>
-            <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
-                <span style='color:#a0aec0;'>حوافز وإضافات {f"({incentives_note})" if incentives_note else ""}</span>
-                <span style='color:#38ef7d;font-weight:600;'>+ {incentives:,.1f} جنيه</span>
-            </div>
-            <div style='display:flex;justify-content:space-between;padding:12px 0 0 0;'>
-                <span style='color:white;font-weight:700;font-size:1.1rem;'>إجمالي الخصومات</span>
-                <span style='color:#fc5c7d;font-weight:700;font-size:1.1rem;'>- {total_deductions:,.1f} جنيه</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+<div style='background:#1a1a2e;border-radius:12px;padding:20px;border:1px solid rgba(255,255,255,0.1);direction:rtl;'>
+    <h4 style='color:#4facfe;margin-top:0;'>📊 تفاصيل الخصومات</h4>
+    <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
+        <span style='color:#a0aec0;'>الراتب الأساسي</span>
+        <span style='color:white;font-weight:600;'>{sal:,.1f} جنيه</span>
+    </div>
+    {excuse_line}
+    <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
+        <span style='color:#a0aec0;'>خصم الغياب ({eff_absent} × {day_rate:.1f})</span>
+        <span style='color:#fc5c7d;font-weight:600;'>- {absent_deduction:,.1f} جنيه</span>
+    </div>
+    <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
+        <span style='color:#a0aec0;'>خصم تأخير ربع يوم ({eff_quarter} × {day_rate/4:.1f})</span>
+        <span style='color:#f7971e;font-weight:600;'>- {quarter_deduction:,.1f} جنيه</span>
+    </div>
+    <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
+        <span style='color:#a0aec0;'>خصم تأخير نصف يوم ({eff_half} × {day_rate/2:.1f})</span>
+        <span style='color:#fd7238;font-weight:600;'>- {half_deduction:,.1f} جنيه</span>
+    </div>
+    <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
+        <span style='color:#a0aec0;'>خصم بدون خروج ({eff_nocheckout} × {day_rate/4:.1f})</span>
+        <span style='color:#b0c4de;font-weight:600;'>- {nocheckout_deduction:,.1f} جنيه</span>
+    </div>
+    <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
+        <span style='color:#a0aec0;'>خصومات إضافية {f"({extra_deductions_note})" if extra_deductions_note else ""}</span>
+        <span style='color:#fc5c7d;font-weight:600;'>- {extra_deductions:,.1f} جنيه</span>
+    </div>
+    <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);'>
+        <span style='color:#a0aec0;'>حوافز وإضافات {f"({incentives_note})" if incentives_note else ""}</span>
+        <span style='color:#38ef7d;font-weight:600;'>+ {incentives:,.1f} جنيه</span>
+    </div>
+    <div style='display:flex;justify-content:space-between;padding:12px 0 0 0;'>
+        <span style='color:white;font-weight:700;font-size:1.1rem;'>إجمالي الخصومات</span>
+        <span style='color:#fc5c7d;font-weight:700;font-size:1.1rem;'>- {total_deductions:,.1f} جنيه</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
     with s2:
         st.markdown(f"""
-        <div class="salary-box">
-            <div class="label">✅ الراتب المستحق</div>
-            <div class="amount">{net_salary:,.1f}</div>
-            <div class="label">جنيه مصري</div>
-        </div>
-        """, unsafe_allow_html=True)
+<div class="salary-box">
+    <div class="label">✅ الراتب المستحق</div>
+    <div class="amount">{net_salary:,.1f}</div>
+    <div class="label">جنيه مصري</div>
+</div>
+""", unsafe_allow_html=True)
 
     # ── Excused detail ──────────────────────────────────────────────────────────
     if st.session_state.excused_keys:
@@ -521,14 +516,14 @@ else:
                     reason = st.session_state.excused_reasons.get(d["key"], "—")
                     lbl, clr = {"absent":("غياب","#fc5c7d"),"quarter":("تأخير ربع يوم","#f7971e"),"half":("تأخير نصف يوم","#fd7238"),"nocheckout":("بدون خروج","#b0c4de")}[vtype]
                     st.markdown(f"""
-                    <div class="excuse-box">
-                        <span style='color:#38ef7d;font-weight:700;'>{d['date'].strftime('%d/%m/%Y')} ({d['day']})</span>
-                        &nbsp;|&nbsp;
-                        <span style='color:{clr};font-weight:600;'>{lbl}</span>
-                        &nbsp;|&nbsp;
-                        <span style='color:#a0aec0;'>العذر: {reason if reason else "لم يُذكر"}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
+<div class="excuse-box">
+    <span style='color:#38ef7d;font-weight:700;'>{d['date'].strftime('%d/%m/%Y')} ({d['day']})</span>
+    &nbsp;|&nbsp;
+    <span style='color:{clr};font-weight:600;'>{lbl}</span>
+    &nbsp;|&nbsp;
+    <span style='color:#a0aec0;'>العذر: {reason if reason else "لم يُذكر"}</span>
+</div>
+""", unsafe_allow_html=True)
 
     # ── Detail tables ───────────────────────────────────────────────────────────
     active_absent = [d for d in results["absent_days"] if not d["excused"]]
